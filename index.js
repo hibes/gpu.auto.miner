@@ -16,7 +16,7 @@ async function main() {
 
   checkGPUs(conf, gpu).forEach((gpuCoin) => {
     if (gpuCoin.disabled !== true) {
-      let cli = conf.crypto[gpuCoin.coin.key].cli.replace('%WORKER%', conf.worker);
+      let cli = conf.crypto[gpuCoin.coin.key].cli.replace('%WORKER%', conf.worker || require('os').hostname());
       cli = cli.split(' ');
       let bin = cli[0];
       let args = cli.slice(1);
@@ -40,7 +40,7 @@ async function main() {
   });
 
   //setTimeout(main, 1800000);
-  setTimeout(main, 5000);
+  setTimeout(main, conf.minTimeBetweenSwitch);
 }
 
 function checkGPUs(conf, coins) {

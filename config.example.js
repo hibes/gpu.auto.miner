@@ -132,5 +132,6 @@ module.exports = {
       },
     },
   ],
+  'minTimeBetweenSwitch': 1800000,
   'worker': 'your_workername_here',
 };
