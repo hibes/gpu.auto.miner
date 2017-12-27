@@ -1,6 +1,10 @@
 let async = require('async');
 let { spawn } = require('child_process');
 
+let DEFAULT_MAX_TIME_BEFORE_KILL = 500;
+let DEFAULT_MIN_TIME_BETWEEN_SWITCH = 1800000;
+let SECONDS_IN_DAY = 60 * 60 * 24;
+
 let conf = require('./config.js');
 let wtm = require('./whattomine.api.js');
 
@@ -23,7 +27,21 @@ async function main() {
 
       if (gpuCoin.coin.key != current_coin) {
         if (current_subprocess !== null) {
-          current_subprocess.kill();
+          let temp = current_subprocess;
+
+          temp.on('exit', () => {
+            temp.exited = true;
+          });
+
+          setTimeout(() => {
+            if (temp.exited !== true) {
+              console.log('Failed to kill the process with a SIGTERM, sending a SIGKILL instead.');
+
+              temp.kill('SIGKILL');
+            }
+          }, conf.maxTimeBeforeKill || DEFAULT_MAX_TIME_BEFORE_KILL);
+
+          current_subprocess.kill('SIGTERM');
 
           console.log('Killed', current_subprocess, 'mining coin', current_coin);
         }
@@ -39,8 +57,7 @@ async function main() {
     }
   });
 
-  //setTimeout(main, 1800000);
-  setTimeout(main, conf.minTimeBetweenSwitch);
+  setTimeout(main, conf.minTimeBetweenSwitch || DEFAULT_MIN_TIME_BETWEEN_SWITCH);
 }
 
 function checkGPUs(conf, coins) {
@@ -49,8 +66,7 @@ function checkGPUs(conf, coins) {
   conf.gpus.forEach((gpu) => {
     rev = gpu.gpu + 'revenue';
     coins.forEach((coin) => {
-      let secondsInDay = 60 * 60 * 24;
-      let totalCoinsPerDay = coin.block_reward * secondsInDay / parseFloat(coin.block_time);
+      let totalCoinsPerDay = coin.block_reward * SECONDS_IN_DAY / parseFloat(coin.block_time);
       let myShareOfHashrate = gpu[coin.algorithm].hashrate / coin.nethash;
 
       coin[rev] = myShareOfHashrate * totalCoinsPerDay * coin.exchange_rate;
@@ -59,21 +75,30 @@ function checkGPUs(conf, coins) {
     rslt.push({
       'gpu': gpu.gpu,
       'disabled': gpu.disabled,
-      'coin': coins.sort((coinA, coinB) => {
-      if (coinA[rev] < coinB[rev]) {
-        return 1;
-      }
-
-      if (coinA[rev] > coinB[rev]) {
-        return -1;
-      }
-
-      return 0;
-      })[0]
+      'coin': coins.sort(coinSortMethod)[0],
     });
   });
 
   return rslt;
+}
+
+function coinSortMethod(coinA, coinB) {
+  if (coinA[rev] < coinB[rev]) {
+    return 1;
+  }
+
+  if (coinA[rev] > coinB[rev]) {
+    return -1;
+  }
+
+  return 0;
+}
+
+/*
+ * Useful method for testing kill functionality.
+ */
+function randomSortMethod() {
+  return (Math.floor(Math.random() * (1 - 0 + 1) + 0) === 0 ? -1 : 1);
 }
 
 main();
